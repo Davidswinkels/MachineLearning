@@ -1,0 +1,200 @@
+---
+title: "Project: Biosystem Engineering by David Swinkels"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+panel.cor <- function(x, y, digits = 2, cex.cor, ...)
+{
+  usr <- par("usr"); on.exit(par(usr))
+  par(usr = c(0, 1, 0, 1))
+  # correlation coefficient
+  r <- cor(x, y)
+  txt <- format(c(r, 0.123456789), digits = digits)[1]
+  txt <- paste("r= ", txt, sep = "")
+  text(0.5, 0.6, txt)
+
+  # p-value calculation
+  p <- cor.test(x, y)$p.value
+  txt2 <- format(c(p, 0.123456789), digits = digits)[1]
+  txt2 <- paste("p= ", txt2, sep = "")
+  if(p<0.01) txt2 <- paste("p= ", "<0.01", sep = "")
+  text(0.5, 0.4, txt2)
+}
+```
+
+## 01: Preparation
+
+```{r 01preparation}
+GHdata = read.csv("Data2011.csv")
+pairs(GHdata, upper.panel=panel.cor)
+
+GHdata_day <- GHdata[GHdata$Rsun>0.3,]
+GHdata_night <- GHdata[GHdata$Rsun<=0.3,]
+
+```
+**Temperature inside is correlated with radiation from sun(r=0.77),temperature outside (r=0.43), opening of energy screen(r=-0.43) relative humidity inside(r=-0.45) and temperature of pipe to heat exchanger (r=-0.49).**
+
+
+## 02: Multiple Linear Model
+```{r 02multlinearmodel}
+lm.fit = lm(Temp~.,data=GHdata)
+summary(lm.fit)
+plot(lm.fit)
+# Extra
+#fullmod=lm(Temp ~ H + CO_2 + Rsun + Tout + Hout + CO2out + Vwind + CO2dos + Lamp + LS + ES + WL + WW + Tp , data = GHdata)
+#nothing=lm(Temp ~ 1, data=GHdata)
+#backwards=step(fullmod, trace=0)
+#forwards = step(nothing,scope=list(lower=formula(nothing),upper=formula(fullmod)), direction="forward")
+
+#lm.fit = lm(Temp ~ Rsun + LS + Tout + CO_2 + Lamp + H + CO2dos,data=GHdata)
+#plot(lm.fit)
+```
+**The conditions for Multiple Linear Regression with all variables is not met, because some predictors are not significant, there are some outliers and there is still some unexplained variation causing a non-linear line in the residuals/fitted value plot.**
+
+
+## 03: ANOVA
+```{r 03anova}
+
+summary(lm.fit)
+
+# Extra
+#paste(lm.fit$coefficients,names(lm.fit$coefficients),collapse = "*")
+```
+**The formula is: Temp ~ H + CO_2 + Rsun + Tout + Hout + CO2out + Vwind + CO2dos + Lamp + LS + ES + WL + WW + Tp. Or in short you can use Temp~. The prediction formula of the response is: Inside Temperature = 4.8376 + 0.1106*H + 0.0011*CO_2+0.0169*Rsun+0.1836*Tout+0.0036*Hout+0.0013*CO20ut+0.0262*Vwind-0.0005*CO2Dos+0.0183*Lamp+0.0267*LS+0.0005*ES-0.0088*WL+0.0007*WW+0.0130*Tp.**
+
+## 04: Remove Non significant variables
+```{r 04Improve Model}
+lm.fit2=lm(Temp ~ H + CO_2 + Rsun + Tout + CO2out + Vwind + CO2dos + Lamp + LS + WL + Tp , data = GHdata)
+summary(lm.fit2)
+
+relchange <- (as.numeric(lm.fit2$coefficients) - as.numeric(lm.fit$coefficients[c(-6,-12,-14)]))*100/as.numeric(lm.fit$coefficients[c(-6,-12,-14)])
+matchange <- as.data.frame(names(lm.fit2$coefficients))
+matchange$change <- relchange
+sig.val.one <- summary(lm.fit)$coefficients[,4]
+sig.val.one <-sig.val.one[c(-6,-12,-14)]
+matchange$sig.val.one <- round(sig.val.one,digits = 3)
+matchange$sig.val.two <- round(summary(lm.fit2)$coefficients[,4], digits=3)
+colnames(matchange) <- c("Names", "Relative Coefficient Change (%)", "Sig.val1", "Sig.val2")
+matchange
+```
+**Hout, ES and WW were removed from the model. __Vwind__,__TP__ and __CO2Out__ have a Coefficient in model2 that relatively changed (-19.4%, -9.2% ,8.0% change)a lot from model1. __Vwind__,__Tp__ and __CO2out__ were not as significant (0.05>p>0.01) as the other predictors (p<0.01). However __WL__ had a high significance (p<0.01) and the coefficient relatively changed (-10.1% change) a lot as well. It does surprise us that WL changed so much while it was highly significant. **
+
+## 05: Remove Non significant variables (Cont.)
+```{r 05Improve Model}
+lm.fit3=lm(Temp ~ H + CO_2 + Rsun + Tout+ CO2dos + Lamp + LS + WL , data = GHdata)
+summary(lm.fit3)
+
+```
+a. TP was removed. The model is: lm(formula = Temp ~ H + CO_2 + Rsun + Tout + CO2out + Vwind + CO2dos + Lamp + LS + WL, data = GHdata). It resembles a backward selection method, but it differs in two things. Firstly a backwards selection would only remove one variable at a time. Secondly a backwards would look at the explained variance (R^2) and not at the significance of the variables.
+
+b. You are removing multiple variables with this type of selection method and thus could remove significant variables, which would have stayed in the true backward selection method. 
+
+## 06: Reloading
+```{r 06reloading}
+rm(list=ls())
+GHdata = read.csv("Data2011.csv")
+
+lm.fit = lm(formula = Temp ~ H + CO_2 + Rsun + Tout + CO2out + CO2dos + Lamp + LS + WL + Tp, data = GHdata)
+
+summary(lm.fit)
+
+```
+**Remove WW, ES, Hout and Vwind variables, because they were not significant. The linear model did not decrease in R-squared untill Vwind was removed. The resulting model is:
+Q6: lm(Temp ~ H + CO_2 + Rsun + Tout + CO2out + CO2dos + Lamp + LS + WL + Tp, data = GHdata) R2 = 0.7367
+Q5: lm(Temp ~ H + CO_2 + Rsun + Tout+ CO2dos + Lamp + LS + WL , data = GHdata) R2 = 0.7361
+Comparing this model (Q6) to the model of question five we can see that CO2out and TP were removed in question five while they could have stayed in the linear model if one removed one variable at a time. The model of question five has a lower explained variance (R2=0.7361) compared to the model of question six (R2=0.7367). Thus the model of question six seems to be better with a small margin.**
+
+## 07: Pipe Temperature
+
+
+```{r 07pipetemperature}
+plot(GHdata$Tp,GHdata$Temp)
+
+```
+Pipe temperature doesn't have a very significant influence on air temperature in our dataset, because the grower likes to keep a stable temperature for the plants around 20 degrees. Thus the grower both uses the water to cool down the temperature inside (above 25 C) and to warm the temperature inside (below 17 degrees). The temperature is balanced by the water heater and thus does not change with the temperature inside.
+
+We are not sure about this answer (WE ARE GEOSCIENTISTS)
+
+## 08: Causility Model
+###a.
+Q6: lm(Temp ~ H + CO_2 + Rsun + Tout + CO2out + CO2dos + Lamp + LS + WL + Tp, data = GHdata) R2 = 0.7367
+
+The assumption behind this model is that all predictors can explain the temperature inside of the green house. In the sense that all predictors cause an effect on temperature inside.
+
+###b.
+The assumption regarding the dynamics of the model is that the variables, relative humidity, CO2 inside, Radiation from sun, Temperature Outside, CO2 outside, Artifical Lighting, Opening of light screen,  and temperature of pipe to heat exchanger, have a positive effect on the temperature. The CO2 dosage and Windows opening leeward have a negative effect on the temperature.
+
+Causality explained:
+A higher relative humidity will have a higher heat capacity. Thus the temperature won't change as quickly if the air is more humid.
+
+Like the theory lying behind the greenhoue effect, more CO2 in this case also stops heat/rediation escape from the greenhouse to outside.
+
+Radiation from sun gives off warmth when it hits the earth surface. Thus radiation from sun should have a positive influence on the temperature inside.
+
+Tempearture outside can influence the temperature inside by the forms of sensible heat.
+
+Like the greenhoue effect, more CO2 outside also stops heat/rediation escape from the earth, reflects it back to the greenhouse and thus keeps the temperature higher.
+
+Artificial lighting should give off heat in the process of making light and thus heat the temperature inside.
+
+Opening the light screen more will let more sun radiation in and thus will give a higher temperature inside the greenhouse.
+
+The temperature from the pipes heats up the greenhouse.
+
+CO2 dosage will cause a higher CO2 inside and thus keep a higher temperature.
+
+Opening the windows on the leeward side will allow temperature from inside and outside to mix more.
+
+After a long discussion, we thought the predictors were realistic.
+
+
+
+## 09: Improving model
+
+
+```{r 09improvingmodel}
+rm(list=ls())
+GHdata = read.csv("Data2011.csv")
+lm.fit0 = lm(formula = Temp ~ H + CO_2 + Rsun + Tout + CO2out + CO2dos + Lamp + LS + WL + Tp, data = GHdata)
+lm.fit1 = lm(formula = Temp ~ H + CO_2 + Rsun + Tout + CO2out + CO2dos + Lamp + LS + WL + Tp + Vwind +I(CO_2*Rsun)+I(CO2out*Rsun)+I(CO2dos*Rsun)+I(Vwind*WL)+I(Vwind*Tout), data = GHdata)
+
+
+
+
+lm.fit2 = lm(formula = (Temp**8) ~ H + CO_2 + Rsun + Tout + CO2out + CO2dos + Lamp + LS + WL + Tp + Vwind +I(CO_2*Rsun)+I(CO2out*Rsun)+I(CO2dos*Rsun)+I(Vwind*WL)+I(Vwind*Tout), data = GHdata)
+
+summary(lm.fit0)
+summary(lm.fit1)
+summary(lm.fit2)
+
+plot(lm.fit2)
+
+```
+```{r 09checking improvements}
+for (value in 1:100){
+  lm.fit2 = lm(formula = (Temp**value) ~ H + CO_2 + Rsun + Tout + CO2out + CO2dos + Lamp + LS + WL + Tp + Vwind +I(CO_2*Rsun)+I(CO2out*Rsun)+I(CO2dos*Rsun)+I(Vwind*WL)+I(Vwind*Tout), data = GHdata)
+  print(paste(value,"=",summary(lm.fit2)$r.squared))
+}
+
+```
+
+The practical problems we encountered were due too the amount of variables and the possible interactions they can have. On top of that you can transform the response variable as well. For example with a log(), sqrt() or **2. We found that a power improved the R2 (power to the eight gives highest value), but it did not realistically make sense to add this to the model. It makes it harder to interpret the model as well.
+
+lm.fit2 = lm(formula = (Temp**7) ~ H + CO_2 + Rsun + Tout + CO2out + CO2dos + Lamp + LS + WL + Tp + Vwind +I(CO_2*Rsun)+I(CO2out*Rsun)+I(CO2dos*Rsun)+I(Vwind*WL)+I(Vwind*Tout), data = GHdata) has a Rsquare of 0.832465732000395
+
+## 10: Benefits model
+This model can help the grower to see which variables have the biggest effect on the temperature in which direction. Thus the grower has better control over his green house ecosystem in terms of energy and optimal environment for plant growth. If cost is linked to these benefits per unit as well. The grower can see which variables can be used most cost-effectively to regulate the temperature inside the greenhouse.
+On operability of this system. Sensors are already used to measure these inputs and control systems can regulate things. The can model can together with these sensors and control systems easily create an optimal environment for the plants with enough warmth.
+
+## 11: Warning Model Preparation
+
+```{r 11preparation}
+data2 = read.csv("Data2011_2.csv")
+plot(data2)
+summary(data2)
+
+
+```
