@@ -1,0 +1,512 @@
+---
+title: "Project: Plant Classification"
+output: html_document
+---
+Authors: David Swinkels (920714820090) and Ping Zhou ()
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+panel.cor <- function(x, y, digits = 2, cex.cor, ...)
+{
+  usr <- par("usr"); on.exit(par(usr))
+  par(usr = c(0, 1, 0, 1))
+  # correlation coefficient
+  r <- cor(x, y)
+  txt <- format(c(r, 0.123456789), digits = digits)[1]
+  txt <- paste("r= ", txt, sep = "")
+  text(0.5, 0.6, txt)
+
+  # p-value calculation
+  p <- cor.test(x, y)$p.value
+  txt2 <- format(c(p, 0.123456789), digits = digits)[1]
+  txt2 <- paste("p= ", txt2, sep = "")
+  if(p<0.01) txt2 <- paste("p= ", "<0.01", sep = "")
+  text(0.5, 0.4, txt2)
+}
+```
+
+
+## 01: Preparation: setup libraries and read datasets
+```{r 01preparation}
+## Loading libraries (MASS, tree, randomforest,gbm)
+
+library(MASS)
+library(class)
+library(tree)
+library(randomForest)
+library(gbm)
+library(e1071)
+
+#$ Clear console, workspace, and plots:
+cat("\014")
+rm(list=ls())
+graphics.off()
+
+## Loading Data
+dataTrain = read.csv(file='training_data/training_data-K_020.csv')[, -1]
+dataTest = read.csv(file='test_data/test_data-K_020.csv')[, -1]
+dataValidate = read.csv(file='validation_data/validation_data-K_020.csv')[, -1]
+dataTrainAndTest = rbind(dataTrain, dataTest)
+
+## Testing if there any NA values in data
+anyNA(dataTrainAndTest)
+anyNA(dataValidate)
+
+```
+
+
+## 02: Logistic Regression Classifier
+
+http://www.utstat.toronto.edu/~brunner/oldclass/appliedf11/handouts/2101f11StepwiseLogisticR.pdf
+```{r 02 Logistic Regression Classifier}
+
+fullmod=glm( Class ~ ., data = dataTrain , family = binomial)
+nothing=glm( Class ~ 1, data = dataTrain , family = binomial)
+
+backwards = step(fullmod,trace=0)
+forwards = step(nothing,scope=list(lower=formula(nothing),upper=formula(fullmod)), direction="forward", trace=0)
+ 
+bestformod=glm(formula(backwards), data = dataTrain, family = binomial)
+bestbackmod=glm(formula(forwards), data = dataTrain, family = binomial)
+
+## Training Error Full Model
+glm.probs=predict(fullmod,type ="response")
+glm.pred=rep("p",dim(dataTrain)[1])
+glm.pred[glm.probs>.5]="s"
+table(glm.pred,dataTrain$Class)
+mean(glm.pred==dataTrain$Class)
+
+## Training Error Forwards Method
+glm.probs=predict(bestformod,type ="response")
+glm.pred=rep("p",dim(dataTrain)[1])
+glm.pred[glm.probs>.5]="s"
+table(glm.pred,dataTrain$Class)
+mean(glm.pred==dataTrain$Class)
+
+## Training Error Backwards Method
+glm.probs=predict(bestbackmod,type ="response")
+glm.pred=rep("p",dim(dataTrain)[1])
+glm.pred[glm.probs>.5]="s"
+table(glm.pred,dataTrain$Class)
+mean(glm.pred==dataTrain$Class)
+
+## Test Error Full Model
+glm.probs=predict(fullmod,newdata=dataTest,type ="response")
+glm.pred=rep("p",dim(dataTrain)[1])
+glm.pred[glm.probs>.5]="s"
+table(glm.pred,dataTest$Class)
+mean(glm.pred==dataTest$Class)
+
+## Test Error Forwards Model
+glm.probs=predict(bestformod,newdata=dataTest,type ="response")
+glm.pred=rep("p",dim(dataTrain)[1])
+glm.pred[glm.probs>.5]="s"
+table(glm.pred,dataTest$Class)
+mean(glm.pred==dataTest$Class)
+
+## Test Error Backwards Model
+glm.probs=predict(bestbackmod,newdata=dataTest,type ="response")
+glm.pred=rep("p",dim(dataTrain)[1])
+glm.pred[glm.probs>.5]="s"
+table(glm.pred,dataTest$Class)
+mean(glm.pred==dataTest$Class)
+```
+
+
+
+## 03: Linear Discriminant Analysis
+```{r 03 Linear Discriminant Analysis}
+## LDA Full Model
+lda.fit=lda(formula(fullmod),data=dataTrain)
+lda.fit
+lda.pred=predict(lda.fit,newdata=dataTest)
+lda.class=lda.pred$class
+table(lda.class,dataTest$Class)
+mean(lda.class==dataTest$Class)
+
+## LDA Forward Model
+lda.fit=lda(formula(bestformod),data=dataTrain)
+lda.fit
+lda.pred=predict(lda.fit,newdata=dataTest)
+lda.class=lda.pred$class
+table(lda.class,dataTest$Class)
+mean(lda.class==dataTest$Class)
+
+## LDA Backward Model
+lda.fit=lda(formula(bestbackmod),data=dataTrain)
+lda.fit
+lda.pred=predict(lda.fit,newdata=dataTest)
+lda.class=lda.pred$class
+table(lda.class,dataTest$Class)
+mean(lda.class==dataTest$Class)
+
+
+```
+
+
+## 04:  Quadratic Discriminant Analysis
+```{r 04 Quadratic Discriminant Analysis}
+## QDA Full Model
+qda.fit=qda(formula(fullmod),data=dataTrain)
+qda.pred=predict(qda.fit,newdata=dataTest)
+qda.class=qda.pred$class
+table(qda.class,dataTest$Class)
+mean(qda.class==dataTest$Class)
+
+## QDA Forward Model
+qda.fit=qda(formula(bestformod),data=dataTrain)
+qda.pred=predict(qda.fit,newdata=dataTest)
+qda.class=qda.pred$class
+table(qda.class,dataTest$Class)
+mean(qda.class==dataTest$Class)
+
+## LDA Backward Model
+qda.fit=qda(formula(bestbackmod),data=dataTrain)
+qda.pred=predict(qda.fit,newdata=dataTest)
+qda.class=qda.pred$class
+table(qda.class,dataTest$Class)
+mean(qda.class==dataTest$Class)
+
+```
+
+## 05: K-Nearest Neighbors
+```{r 05 K-Nearest Neighbors}
+## KNN Full Model
+range = 1:dim(dataTrain)[1]
+result=data.frame(range,ncol=2)
+colnames(result)<-c("Kvalue","TestError")
+train.X=dataTrain[,-1]
+test.X=dataTest[,-1]
+for(kvalue in range){
+  set.seed(1)
+  knn.pred=knn(train.X,test.X,dataTrain$Class,k=kvalue)
+  result[kvalue,]=c(kvalue,1-mean(knn.pred==dataTest$Class)) 
+}
+
+lo <- loess(result$TestError~result$Kvalue)
+plot(result$Kvalue,result$TestError)
+lines(predict(lo), col='red', lwd=2)
+
+BestKvalue = which.min(result$TestError)
+PredAccuracy = round((1 - result$TestError[BestKvalue])*100,2)
+print(paste("The best K-value is", as.character(BestKvalue), "with a prediction accuracy of", as.character(PredAccuracy),"%"))
+
+
+## KNN Forwards Model
+result=data.frame(range,ncol=2)
+colnames(result)<-c("Kvalue","TestError")
+train.X=dataTrain[,-1]
+# Use predictors we got from the bestformod
+train.X=train.X[names(bestformod$coefficients)[-1]]
+test.X=dataTest[,-1]
+test.X=test.X[names(bestformod$coefficients)[-1]]
+for(kvalue in range){
+  set.seed(1)
+  knn.pred=knn(train.X,test.X,dataTrain$Class,k=kvalue)
+  result[kvalue,]=c(kvalue,1-mean(knn.pred==dataTest$Class)) 
+}
+
+lo <- loess(result$TestError~result$Kvalue)
+plot(result$Kvalue,result$TestError)
+lines(predict(lo), col='red', lwd=2)
+
+BestKvalue = which.min(result$TestError)
+PredAccuracy = round((1 - result$TestError[BestKvalue])*100,2)
+print(paste("The best K-value is", as.character(BestKvalue), "with a prediction accuracy of", as.character(PredAccuracy),"%"))
+
+## KNN Backwards Model
+result=data.frame(range,ncol=2)
+colnames(result)<-c("Kvalue","TestError")
+train.X=dataTrain[,-1]
+# Use predictors we got from the bestbackmod
+train.X=train.X[names(bestbackmod$coefficients)[-1]]
+test.X=dataTest[,-1]
+test.X=test.X[names(bestbackmod$coefficients)[-1]]
+for(kvalue in range){
+  set.seed(1)
+  knn.pred=knn(train.X,test.X,dataTrain$Class,k=kvalue)
+  result[kvalue,]=c(kvalue,1-mean(knn.pred==dataTest$Class)) 
+}
+
+lo <- loess(result$TestError~result$Kvalue)
+plot(result$Kvalue,result$TestError)
+lines(predict(lo), col='red', lwd=2)
+
+BestKvalue = which.min(result$TestError)
+PredAccuracy = round((1 - result$TestError[BestKvalue])*100,2)
+print(paste("The best K-value is", as.character(BestKvalue), "with a prediction accuracy of", as.character(PredAccuracy),"%"))
+
+
+
+```
+
+## 06: Classification Trees
+```{r 06: Classification Trees}
+## Trees Full Model
+tree.plant=tree(Class~.,data = dataTrain)
+tree.pred = predict(tree.plant, newdata = dataTest, type="class")
+table(tree.pred,dataTest$Class)
+mean(tree.pred==dataTest$Class)
+plot(tree.plant)
+text(tree.plant,pretty=0)
+
+## Check Number of Nodes
+for (numnodes in 2:20){
+  prune.plant=prune.misclass(tree.plant,best=numnodes)
+  tree.pred = predict(prune.plant,newdata=dataTest,type="class")
+  table(tree.pred,dataTest$Class)
+  meanvalue = mean(tree.pred==dataTest$Class)
+  print(paste(as.character(numnodes),as.character(meanvalue)))
+}
+
+## Prune dataset
+tree.plant=tree(Class~.,data = dataTrain)
+cv.plant = cv.tree(tree.plant,FUN=prune.misclass)
+numnodes = cv.plant$size[which.min(cv.plant$dev)]
+
+plot(cv.plant$size,cv.plant$dev,type="b")
+plot(cv.plant$k,cv.plant$dev,type="b")
+
+prune.plant=prune.misclass(tree.plant,best=numnodes)
+plot(prune.plant)
+text(prune.plant,pretty=0)
+
+tree.pred = predict(prune.plant,newdata=dataTest,type="class")
+table(tree.pred,dataTest$Class)
+meanvalue = mean(tree.pred==dataTest$Class)
+print(paste(as.character(numnodes),as.character(meanvalue)))
+```
+
+## 07: Bagging and Random Forest
+```{r 07 RandomForest}
+
+result=data.frame(1:50,ncol=2)
+for (ntree in 1:50){
+  set.seed(1)
+  bag.plant =randomForest(Class~.,data=dataTrain,mtry=sqrt(dim(dataTrain)[2]-1),ntree=ntree,importance=TRUE)
+  yhat.bag=predict(bag.plant,newdata=dataTest)
+  result[ntree,]=c(ntree,mean(yhat.bag==dataTest$Class))
+}
+
+result2=data.frame(1:1600,ncol=2)
+names(result2)=c("Seed", "PredictionAccuracy")
+for (seedn in 1:1600){
+  set.seed(seedn)
+  bag.plant =randomForest(Class~.,data=dataTrain,mtry=sqrt(dim(dataTrain)[2]-1),ntree=which.max(result$ncol),importance=TRUE)
+  yhat.bag=predict(bag.plant,newdata=dataTest)
+  result2[seedn,] = c(as.character(seedn),as.character(mean(yhat.bag==dataTest$Class)))
+}
+lo <- loess(result2$PredictionAccuracy~result2$Seed)
+plot(result2$Seed,result2$PredictionAccuracy)
+lines(predict(lo), col='red', lwd=2)  
+
+set.seed(which.max(result2$Seed))
+bag.plant = randomForest(Class~.,data=dataTrain,mtry=sqrt(dim(dataTrain)[2]-1),ntree=which.max(result$ncol),importance=TRUE)
+yhat.bag=predict(bag.plant,newdata=dataTest)
+mean(yhat.bag==dataTest$Class)
+
+
+
+```
+
+
+## 08: Boosting
+
+```{r 08 Boosting}
+# 
+# dataTrain2 = dataTrain
+# dataTrain2$Class01[dataTrain$Class %in% "p"]<-1
+# dataTrain2$Class01[dataTrain$Class %in% "s"]<-0
+# dataTrain2=dataTrain2[,-1]
+# 
+# dataTest2 = dataTrain
+# dataTest2$Class01[dataTest$Class %in% "p"]<-1
+# dataTest2$Class01[dataTest$Class %in% "s"]<-0
+# dataTest2=dataTest2[,-1]
+# 
+# set.seed(1)
+# boost.plant=gbm(Class01~.,data=dataTrain2,distribution="bernoulli",n.trees=5, interaction.depth=1)
+# yhat.boost=predict(boost.plant,newdata=dataTest2,n.trees=5)
+# mean(yhat.boost==dataTest2$Class01)
+
+# set.seed(1)     
+# boost.plant=gbm(Class~.,data=dataTrain,distribution="bernoulli",n.trees=5,shrinkage=0.2, interaction.depth=1)
+# yhat.boost=predict(boost.plant,newdata=dataTest,n.trees=5)
+# mean(yhat.boost==dataTest$Class)
+
+# set.seed(1)
+# pows = seq(-10, -0.2, by = 0.1)
+# lambdas = 10^pows
+# length.lambdas = length(lambdas)
+# train.errors = rep(NA, length.lambdas)
+# test.errors = rep(NA, length.lambdas)
+# for (i in 1:length.lambdas) {
+#     boost.plant = gbm(Salary ~ ., data = Hitters.train, distribution = "gaussian", 
+#         n.trees = 1000, shrinkage = lambdas[i])
+#     train.pred = predict(boost.hitters, Hitters.train, n.trees = 1000)
+#     test.pred = predict(boost.hitters, Hitters.test, n.trees = 1000)
+#     train.errors[i] = mean((Hitters.train$Salary - train.pred)^2)
+#     test.errors[i] = mean((Hitters.test$Salary - test.pred)^2)
+# }
+# 
+# plot(lambdas, train.errors, type = "b", xlab = "Shrinkage", ylab = "Train MSE", 
+#     col = "blue", pch = 20)
+# 
+# plot(lambdas, test.errors, type = "b", xlab = "Shrinkage", ylab = "Test MSE", 
+#     col = "red", pch = 20)
+
+
+```
+
+## 09: Support Vector Classifier Linear
+```{r 09 Support Vector Classifier Linear}
+
+costlist=c(0.001,0.01,0.1,1,5,10,100,1000,10000)
+PredAccuracy=c()
+for (i in 1:length(costlist)){
+  svmfitlini=svm(Class~.,data=dataTrain, kernel="linear",cost=costlist[i])
+  ypred=predict(svmfitlini,newdata=dataTest)
+  table = table(predict=ypred,truth=dataTest$Class)
+  predrate = (table[1,1]+table[2,2])/sum(table)
+  PredAccuracy[i]=predrate
+}
+PredAccuracy
+
+costlist=c(0.001,0.01,0.1,1,5,10,100,1000,10000)
+PredAccuracy=c()
+for (i in 1:length(costlist)){
+  svmfitlini=svm(formula(bestformod),data=dataTrain, kernel="linear",cost=costlist[i])
+  ypred=predict(svmfitlini,newdata=dataTest)
+  table = table(predict=ypred,truth=dataTest$Class)
+  predrate = (table[1,1]+table[2,2])/sum(table)
+  PredAccuracy[i]=predrate
+}
+PredAccuracy
+
+costlist=c(0.001,0.01,0.1,1,5,10,100,1000,10000)
+PredAccuracy=c()
+for (i in 1:length(costlist)){
+  svmfitlini=svm(formula(bestbackmod),data=dataTrain, kernel="linear",cost=costlist[i])
+  ypred=predict(svmfitlini,newdata=dataTest)
+  table = table(predict=ypred,truth=dataTest$Class)
+  predrate = (table[1,1]+table[2,2])/sum(table)
+  PredAccuracy[i]=predrate
+}
+PredAccuracy
+
+```
+
+## 09: Support Vector Classifier Polynomial
+```{r 09 Support Vector Classifier Polynomial}
+
+costlist=c(0.001,0.01,0.1,1,5,10,100,1000,10000)
+PredAccuracy=c()
+for (i in 1:length(costlist)){
+  svmfitlini=svm(Class~.,data=dataTrain, kernel="polynomial",cost=costlist[i])
+  ypred=predict(svmfitlini,newdata=dataTest)
+  table = table(predict=ypred,truth=dataTest$Class)
+  predrate = (table[1,1]+table[2,2])/sum(table)
+  PredAccuracy[i]=predrate
+}
+PredAccuracy
+
+costlist=c(0.001,0.01,0.1,1,5,10,100,1000,10000)
+PredAccuracy=c()
+for (i in 1:length(costlist)){
+  svmfitlini=svm(formula(bestformod),data=dataTrain, kernel="polynomial",cost=costlist[i])
+  ypred=predict(svmfitlini,newdata=dataTest)
+  table = table(predict=ypred,truth=dataTest$Class)
+  predrate = (table[1,1]+table[2,2])/sum(table)
+  PredAccuracy[i]=predrate
+}
+PredAccuracy
+
+costlist=c(0.001,0.01,0.1,1,5,10,100,1000,10000)
+PredAccuracy=c()
+for (i in 1:length(costlist)){
+  svmfitlini=svm(formula(bestbackmod),data=dataTrain, kernel="polynomial",cost=costlist[i])
+  ypred=predict(svmfitlini,newdata=dataTest)
+  table = table(predict=ypred,truth=dataTest$Class)
+  predrate = (table[1,1]+table[2,2])/sum(table)
+  PredAccuracy[i]=predrate
+}
+PredAccuracy
+
+```
+
+## 09: Support Vector Classifier Radial
+```{r 09 Support Vector Classifier Radial}
+
+costlist=c(0.001,0.01,0.1,1,5,10,100,1000,10000)
+PredAccuracy=c()
+for (i in 1:length(costlist)){
+  svmfitlini=svm(Class~.,data=dataTrain, kernel="radial",cost=costlist[i])
+  ypred=predict(svmfitlini,newdata=dataTest)
+  table = table(predict=ypred,truth=dataTest$Class)
+  predrate = (table[1,1]+table[2,2])/sum(table)
+  PredAccuracy[i]=predrate
+}
+PredAccuracy
+
+costlist=c(0.001,0.01,0.1,1,5,10,100,1000,10000)
+PredAccuracy=c()
+for (i in 1:length(costlist)){
+  svmfitlini=svm(formula(bestformod),data=dataTrain, kernel="radial",cost=costlist[i])
+  ypred=predict(svmfitlini,newdata=dataTest)
+  table = table(predict=ypred,truth=dataTest$Class)
+  predrate = (table[1,1]+table[2,2])/sum(table)
+  PredAccuracy[i]=predrate
+}
+PredAccuracy
+
+costlist=c(0.001,0.01,0.1,1,5,10,100,1000,10000)
+PredAccuracy=c()
+for (i in 1:length(costlist)){
+  svmfitlini=svm(formula(bestbackmod),data=dataTrain, kernel="radial",cost=costlist[i])
+  ypred=predict(svmfitlini,newdata=dataTest)
+  table = table(predict=ypred,truth=dataTest$Class)
+  predrate = (table[1,1]+table[2,2])/sum(table)
+  PredAccuracy[i]=predrate
+}
+PredAccuracy
+
+```
+
+## 09: Fine Tuning Forward Selection Method Support Vector Classifier Radial
+```{r 09 Support Vector Classifier Radial}
+
+costlist=c(0.001,0.01,0.1,1,5,10,100,1000,10000)
+PredAccuracy=c()
+for (i in 1:1000){
+  svmfitlini=svm(formula(bestformod),data=dataTrain, kernel="radial",cost=2.45+i*0.0001)
+  ypred=predict(svmfitlini,newdata=dataTest)
+  table = table(predict=ypred,truth=dataTest$Class)
+  predrate = (table[1,1]+table[2,2])/sum(table)
+  PredAccuracy[i]=predrate
+}
+
+(2.45+which.max(PredAccuracy)*0.0001)
+
+PredAccuracy2=c()
+for (i in 1:1000){
+  svmfitlini=svm(formula(bestformod),data=dataTrain, kernel="radial",gamma=0.1+i*0.0001,cost=2.45+which.max(PredAccuracy)*0.0001)
+  ypred=predict(svmfitlini,newdata=dataTest)
+  table = table(predict=ypred,truth=dataTest$Class)
+  predrate = (table[1,1]+table[2,2])/sum(table)
+  PredAccuracy2[i]=predrate
+}
+0.1+which.max(PredAccuracy2)*0.0001
+max(PredAccuracy2)
+```
+
+## 10:
+```{r 10}
+
+```
+
+## 11: 
+```{r 11}
+
+
+```
